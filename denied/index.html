@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Adorime BLE Host</title>
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #0d0d0f; color: #e8e8f0;
+    min-height: 100vh; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; padding: 24px; gap: 16px;
+  }
+  h1 { font-size: 20px; font-weight: 600; }
+  .status-box {
+    background: #18181c; border: 1px solid #2a2a32; border-radius: 14px;
+    padding: 16px 20px; width: 100%; max-width: 360px;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .status-row { display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
+  .status-label { color: #666; }
+  .status-value { font-weight: 500; font-size: 12px; font-family: monospace; }
+  .ok { color: #4ade80; } .err { color: #f87171; } .wait { color: #facc15; } .info { color: #c084fc; font-weight: bold;}
+  .copy-btn {
+    background: #2a2a32; color: #e8e8f0; border: none; padding: 4px 10px;
+    border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer;
+    margin-left: 8px; transition: background 0.1s;
+  }
+  .copy-btn:active { background: #3f3f46; transform: scale(0.95); }
+  .copy-btn.success { background: #34d399; color: #000; }
+  .log-box {
+    background: #18181c; border: 1px solid #2a2a32; border-radius: 12px;
+    padding: 12px; width: 100%; max-width: 360px; height: 200px;
+    overflow-y: auto; font-family: monospace; font-size: 11px; line-height: 1.6; color: #aaa;
+  }
+  .log-entry.ok { color: #4ade80; } .log-entry.err { color: #f87171; } .log-entry.info { color: #60a5fa; }
+  button.main-btn {
+    width: 100%; max-width: 360px; padding: 15px; border-radius: 12px; border: none;
+    font-size: 15px; font-weight: 600; cursor: pointer; transition: transform 0.1s;
+  }
+  button.main-btn:active { transform: scale(0.97); }
+  button.main-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .btn-scan { background: linear-gradient(135deg, #c084fc, #818cf8); color: #fff; }
+  .btn-send { background: linear-gradient(135deg, #34d399, #059669); color: #fff; }
+  .btn-stop { background: linear-gradient(135deg, #60a5fa, #3b82f6); color: #fff; }
+  .btn-disc { background: #1c1c20; color: #f87171; border: 1px solid #3f3f46; }
+  .controls { width: 100%; max-width: 360px; display: flex; flex-direction: column; gap: 12px; }
+  .slider-label { font-size: 13px; color: #888; display: flex; justify-content: space-between; }
+  input[type=range] { width: 100%; accent-color: #c084fc; cursor: pointer; }
+  .big-val { font-size: 40px; font-weight: 700; color: #c084fc; text-align: center; }
+</style>
+
+  <!-- PWA -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link id="pwa-manifest" rel="manifest">
+  <script>
+  (function() {
+    var manifest = {
+  "name": "Lock Host",
+  "short_name": "Host",
+  "start_url": "/lock/host.html",
+  "display": "standalone",
+  "background_color": "#0d0d0f",
+  "theme_color": "#7c3aed",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48cmVjdCB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgcng9IjgwIiBmaWxsPSIjMWExYTJlIi8+PHJlY3QgeD0iMTU2IiB5PSIyMzIiIHdpZHRoPSIyMDAiIGhlaWdodD0iMTYwIiByeD0iMjAiIGZpbGw9IiM3YzNhZWQiLz48cGF0aCBkPSJNMTkyIDIzMnYtNTJhNjQgNjQgMCAwIDEgMTI4IDB2NTIiIHN0cm9rZT0iI2E3OGJmYSIgc3Ryb2tlLXdpZHRoPSIyOCIgZmlsbD0ibm9uZSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+PGNpcmNsZSBjeD0iMjU2IiBjeT0iMzEyIiByPSIyMCIgZmlsbD0iI2U5ZDVmZiIvPjwvc3ZnPg==",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48cmVjdCB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgcng9IjgwIiBmaWxsPSIjMWExYTJlIi8+PHJlY3QgeD0iMTU2IiB5PSIyMzIiIHdpZHRoPSIyMDAiIGhlaWdodD0iMTYwIiByeD0iMjAiIGZpbGw9IiM3YzNhZWQiLz48cGF0aCBkPSJNMTkyIDIzMnYtNTJhNjQgNjQgMCAwIDEgMTI4IDB2NTIiIHN0cm9rZT0iI2E3OGJmYSIgc3Ryb2tlLXdpZHRoPSIyOCIgZmlsbD0ibm9uZSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+PGNpcmNsZSBjeD0iMjU2IiBjeT0iMzEyIiByPSIyMCIgZmlsbD0iI2U5ZDVmZiIvPjwvc3ZnPg==",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+};
+    var blob = new Blob([JSON.stringify(manifest)], {type:'application/json'});
+    document.getElementById('pwa-manifest').href = URL.createObjectURL(blob);
+    if ('serviceWorker' in navigator) {
+      var swCode = `const CACHE = 'lock-v1';
+const ASSETS = [location.href];
+self.addEventListener('install', e => {
+  e.waitUntil(caches.open(CACHE).then(c => c.add(location.href)).catch(()=>{}));
+  self.skipWaiting();
+});
+self.addEventListener('fetch', e => {
+  e.respondWith(caches.match(e.request).then(r => r || fetch(e.request)));
+});`;
+      var swBlob = new Blob([swCode], {type:'application/javascript'});
+      navigator.serviceWorker.register(URL.createObjectURL(swBlob), {scope: '/'}).catch(function(){});
+    }
+  })();
+  </script>
+  <style>
+  #pwa-install-btn {
+    position: fixed; bottom: 16px; right: 16px; z-index: 9999;
+    background: #7c3aed; color: #fff; border: none; border-radius: 50px;
+    padding: 10px 18px; font-size: 13px; font-weight: 600; cursor: pointer;
+    box-shadow: 0 4px 20px rgba(124,58,237,.5); display: none;
+    align-items: center; gap: 8px;
+  }
+  #pwa-install-btn.visible { display: flex; }
+  </style>
+
+</head>
+<body>
+
+<h1>🔵 Adorime BLE Host</h1>
+
+<div class="status-box">
+  <div class="status-row">
+    <span class="status-label">Remote ID</span>
+    <div style="display: flex; align-items: center;">
+      <span class="status-value info" id="peer-id">connecting...</span>
+      <button class="copy-btn" id="copy-btn" onclick="copyId()" style="display:none;">📋 Copy</button>
+    </div>
+  </div>
+  <div class="status-row">
+    <span class="status-label">GitHub Sync</span>
+    <span class="status-value wait" id="git-status">pending...</span>
+  </div>
+  <div class="status-row">
+    <span class="status-label">Device</span>
+    <span class="status-value wait" id="device-status">not connected</span>
+  </div>
+</div>
+
+<button class="main-btn btn-scan" id="btn-scan" onclick="scanAndConnect()">Scan &amp; Connect — Pick DT01</button>
+
+<div class="controls" id="controls" style="display:none">
+  <div class="slider-label"><span>Intensity</span><span id="pct-label">50%</span></div>
+  <input type="range" id="slider" min="0" max="100" value="50" oninput="onSlider(this.value)">
+  <div class="big-val" id="big-val">50</div>
+  <button class="main-btn btn-send" onclick="triggerLocalVibrate()">⚡ Send Vibrate</button>
+  <button class="main-btn btn-stop" onclick="triggerLocalStop()">⏹ Stop (0%)</button>
+  <button class="main-btn btn-disc" onclick="disconnect()">Disconnect</button>
+</div>
+
+<div class="log-box" id="log"></div>
+
+<script>
+// Token: pass once via URL hash #t=TOKEN, stored to localStorage after that
+(function(){
+  const hash = location.hash.slice(1);
+  const params = new URLSearchParams(hash);
+  if (params.get('t')) { localStorage.setItem('gh_token', params.get('t')); location.hash = ''; }
+})();
+const GITHUB_TOKEN = localStorage.getItem('gh_token') || '';
+const GITHUB_REPO  = 'maciek11123/lock';
+const ID_FILE      = 'id.json';
+
+function getPersistentId() {
+  const FIXED_ID = 'LOCKS-7B2K';
+  try { localStorage.setItem('adorime_peer_id', FIXED_ID); } catch(e) {}
+  return FIXED_ID;
+}
+
+async function pushIdToGitHub(id) {
+  try {
+    // Get current file SHA if it exists
+    let sha = null;
+    const getRes = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${ID_FILE}`, {
+      headers: { 'Authorization': `token ${GITHUB_TOKEN}`, 'Accept': 'application/vnd.github+json' }
+    });
+    if (getRes.ok) { const data = await getRes.json(); sha = data.sha; }
+
+    const content = btoa(JSON.stringify({ id, updated: new Date().toISOString() }));
+    const body = { message: `update host id: ${id}`, content, ...(sha ? { sha } : {}) };
+
+    const putRes = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${ID_FILE}`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `token ${GITHUB_TOKEN}`,
+        'Accept': 'application/vnd.github+json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+
+    if (putRes.ok) {
+      document.getElementById('git-status').textContent = 'synced ✓';
+      document.getElementById('git-status').className = 'status-value ok';
+      log('✅ ID pushed to GitHub', 'ok');
+    } else {
+      throw new Error(await putRes.text());
+    }
+  } catch(e) {
+    document.getElementById('git-status').textContent = 'sync failed';
+    document.getElementById('git-status').className = 'status-value err';
+    log(`GitHub sync failed: ${e.message}`, 'err');
+  }
+}
+
+const myId = getPersistentId();
+const peer = new Peer(myId);
+
+peer.on('open', id => {
+  document.getElementById('peer-id').textContent = id;
+  document.getElementById('copy-btn').style.display = 'block';
+  log('Ready for remote. Share the ID above.', 'info');
+  pushIdToGitHub(id);
+});
+
+const remotes = new Set();
+
+function updateRemoteCount() {
+  const n = remotes.size;
+  const el = document.getElementById('device-status');
+  if (n === 0) { el.textContent = 'no remotes'; el.className = 'status-value wait'; }
+  else { el.textContent = n + ' remote' + (n > 1 ? 's' : '') + ' connected'; el.className = 'status-value ok'; }
+}
+
+peer.on('connection', conn => {
+  remotes.add(conn);
+  log(`Remote connected (${remotes.size} total)`, 'ok');
+  updateRemoteCount();
+  conn.on('data', data => {
+    if (data.action === 'constant') {
+      clearInterval(patternInterval);
+      intensity = data.val;
+      onSlider(intensity);
+      sendVibrate();
+    } else if (data.action === 'pattern') {
+      playPattern(data.vals);
+    } else if (data.action === 'stop') {
+      triggerLocalStop();
+    }
+  });
+  conn.on('close', () => {
+    remotes.delete(conn);
+    log(`Remote disconnected (${remotes.size} remaining)`, 'info');
+    updateRemoteCount();
+  });
+  conn.on('error', () => {
+    remotes.delete(conn);
+    updateRemoteCount();
+  });
+});
+
+function copyId() {
+  navigator.clipboard.writeText(myId).then(() => {
+    const btn = document.getElementById('copy-btn');
+    btn.textContent = '✅ Copied!';
+    btn.classList.add('success');
+    setTimeout(() => { btn.textContent = '📋 Copy'; btn.classList.remove('success'); }, 2000);
+  }).catch(() => { log('Failed to copy ID to clipboard', 'err'); });
+}
+
+let patternInterval = null;
+function playPattern(vals) {
+  clearInterval(patternInterval);
+  let i = 0;
+  patternInterval = setInterval(() => {
+    intensity = Math.round(vals[i % vals.length]);
+    onSlider(intensity);
+    sendVibrate();
+    i++;
+  }, 250);
+}
+
+function triggerLocalVibrate() { clearInterval(patternInterval); sendVibrate(); }
+function triggerLocalStop() { clearInterval(patternInterval); onSlider(0); sendStop(); }
+
+const SVC_UUID   = '00001000-0000-1000-8000-00805f9b34fb';
+const WRITE_UUID = '00001001-0000-1000-8000-00805f9b34fb';
+const SVC_FF12   = '0000ff12-0000-1000-8000-00805f9b34fb';
+const SVC_FF20   = '0000ff20-0000-1000-8000-00805f9b34fb';
+const CHR_FF15   = '0000ff15-0000-1000-8000-00805f9b34fb';
+const CHR_FF21   = '0000ff21-0000-1000-8000-00805f9b34fb';
+
+const KeyTab = [
+  [0,  24, -104,  -9, -91,  61,  13,  41,  37,  80,  68,  70],
+  [0,  69,  110, 106, 111, 120,  32,  83,  45,  49,  46,  55],
+  [0, 101,  120,  32,  84, 111, 121, 115,  10,-114, -99, -93],
+  [0, -59,  -42, -25,  -8,  10,  50,  32, 111,  98,  13,  10],
+];
+
+function toSignedByte(n) { n = n & 0xFF; return n > 127 ? n - 256 : n; }
+function GetTabKey(prevByte, i) { const row = ((prevByte % 4) + 4) % 4; return KeyTab[row][i]; }
+function Encrypt(bArr) {
+  const out = new Array(12);
+  out[0] = bArr[0]; const b = bArr[0];
+  for (let i = 1; i < 12; i++) { out[i] = toSignedByte((GetTabKey(out[i - 1], i) ^ b ^ bArr[i]) + GetTabKey(out[i - 1], i)); }
+  return out;
+}
+function sendBytes(payload10) {
+  const buf = new Array(12).fill(0);
+  buf[0] = 35;
+  for (let i = 0; i < 10; i++) buf[i + 1] = toSignedByte(payload10[i]);
+  let cs = 0; for (let i = 0; i < 11; i++) cs += buf[i];
+  buf[11] = toSignedByte(cs);
+  const encrypted = Encrypt(buf);
+  return { bytes: new Uint8Array(encrypted.map(b => b & 0xFF)) };
+}
+function buildPayload(intensity0to100) { return [0x5A, 0x00, 0x00, 0x01, 0x31, intensity0to100, 0, 0, 0, 0]; }
+
+let device = null, writeChar = null, intensity = 50;
+
+// ── Command polling ────────────────────────────────────────────────────
+let lastCommandTs = 0;
+async function pollCommand() {
+  try {
+    const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/command.json?t=${Date.now()}`, {
+      headers: { 'Authorization': `token ${GITHUB_TOKEN}`, 'Accept': 'application/vnd.github+json' }
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    const cmd = JSON.parse(atob(data.content));
+    if (cmd.ts <= lastCommandTs) return; // already executed
+    lastCommandTs = cmd.ts;
+    log(`📡 Remote command: ${cmd.action} ${cmd.val ?? ''}`, 'info');
+    if (cmd.action === 'constant') { clearInterval(patternInterval); intensity = cmd.val; onSlider(intensity); sendVibrate(); }
+    else if (cmd.action === 'pattern') { playPattern(cmd.vals); }
+    else if (cmd.action === 'stop') { triggerLocalStop(); }
+  } catch(e) {}
+}
+setInterval(pollCommand, 3000);
+
+function log(msg, type = '') {
+  const box = document.getElementById('log');
+  const d = document.createElement('div');
+  d.className = 'log-entry ' + type;
+  d.textContent = `[${new Date().toLocaleTimeString('en-US',{hour12:false})}] ${msg}`;
+  box.appendChild(d);
+  box.scrollTop = box.scrollHeight;
+}
+
+window.onload = () => {
+  if (navigator.bluetooth) { log('Web Bluetooth ready', 'ok'); }
+  else { document.getElementById('btn-scan').disabled = true; log('Web Bluetooth not supported', 'err'); }
+};
+
+async function scanAndConnect() {
+  try {
+    device = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: [SVC_UUID, SVC_FF12, SVC_FF20] });
+    await connectGATT();
+  } catch(e) { log(`Error: ${e.message}`, 'err'); }
+}
+
+async function connectGATT() {
+  try {
+    device.addEventListener('gattserverdisconnected', onDisconnected);
+    setStatus('connecting...', 'wait');
+    const server = await device.gatt.connect();
+    let service = null;
+    for (const uuid of [SVC_UUID, SVC_FF12, SVC_FF20]) {
+      try { service = await server.getPrimaryService(uuid); break; } catch(e) {}
+    }
+    for (const uuid of [WRITE_UUID, CHR_FF15, CHR_FF21]) {
+      try { writeChar = await service.getCharacteristic(uuid); break; } catch(e) {}
+    }
+    setStatus(`${device.name || 'device'} ✓`, 'ok');
+    document.getElementById('btn-scan').style.display = 'none';
+    document.getElementById('controls').style.display = 'flex';
+    log('✅ Connected via BLE', 'ok');
+  } catch(e) { setStatus('failed', 'err'); log(`GATT error: ${e.message}`, 'err'); }
+}
+
+async function writeToDevice(uint8arr) {
+  if (!writeChar) return;
+  if (writeChar.properties.writeWithoutResponse) await writeChar.writeValueWithoutResponse(uint8arr);
+  else await writeChar.writeValue(uint8arr);
+}
+
+async function sendVibrate() {
+  try { const r = sendBytes(buildPayload(intensity)); await writeToDevice(r.bytes); } catch(e) {}
+}
+async function sendStop() {
+  try { const r = sendBytes(buildPayload(0)); await writeToDevice(r.bytes); } catch(e) {}
+}
+
+function onSlider(val) {
+  intensity = parseInt(val);
+  document.getElementById('slider').value = intensity;
+  document.getElementById('pct-label').textContent = intensity + '%';
+  document.getElementById('big-val').textContent = intensity;
+}
+
+function onDisconnected() {
+  setStatus('disconnected', 'err');
+  writeChar = null;
+  document.getElementById('controls').style.display = 'none';
+  document.getElementById('btn-scan').style.display = '';
+}
+
+async function disconnect() { if (device?.gatt?.connected) device.gatt.disconnect(); }
+function setStatus(txt, cls) {
+  const el = document.getElementById('device-status');
+  el.textContent = txt; el.className = 'status-value ' + cls;
+}
+</script>
+
+  <button id="pwa-install-btn" onclick="pwaInstall()">⬇ Install App</button>
+  <script>
+  var _deferredPrompt;
+  window.addEventListener('beforeinstallprompt', function(e) {
+    e.preventDefault(); _deferredPrompt = e;
+    document.getElementById('pwa-install-btn').classList.add('visible');
+  });
+  window.addEventListener('appinstalled', function() {
+    document.getElementById('pwa-install-btn').classList.remove('visible');
+  });
+  function pwaInstall() {
+    if (_deferredPrompt) { _deferredPrompt.prompt(); _deferredPrompt.then(function(){ _deferredPrompt=null; }); }
+    else { alert('To install: use your browser menu → "Add to Home Screen" or "Install App"'); }
+  }
+  </script>
+
+</body>
+</html>
